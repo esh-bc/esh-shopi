@@ -1,6 +1,9 @@
 [build]
 builder = "NIXPACKS"
 
+[phases.build]
+cmds = ["go build -o checkout checkout.go"]
+
 [deploy]
 startCommand = "./checkout"
 healthcheckPath = "/status"
@@ -12,3 +15,5 @@ restartPolicyMaxRetries = 3
 GOGC = "50"
 GOMEMLIMIT = "800MiB"
 PORT = "5001"
+
+
