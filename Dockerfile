@@ -7,10 +7,7 @@ RUN go build -o checkout checkout.go
 FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/checkout .
-
-# ✅ HARDCODED ENV VARS — no railway variables needed
 ENV GOGC=50
 ENV GOMEMLIMIT=800MiB
-
 EXPOSE 8080
 CMD ["./checkout"]
