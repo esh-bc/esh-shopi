@@ -1,1 +1,1 @@
-web: ./checkout
+web: ./shopify-engine
