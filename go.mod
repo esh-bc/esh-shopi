@@ -1,1 +1,3 @@
-go mod init shopify-engine
+module shopify-engine
+
+go 1.21
