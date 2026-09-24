@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,7 +26,6 @@ import (
 const (
 	PER_USER_CONCURRENT   = 500
 	GLOBAL_MAX_CONCURRENT = 1500
-	PORT                  = 5001
 	MAX_POLL_ATTEMPTS     = 4
 	POLL_BASE_DELAY_MS    = 400
 )
@@ -309,7 +309,7 @@ func nonJSONResponseCode(status int, body []byte) string {
 	if text == "" {
 		return "RATE_LIMITED"
 	}
-	low := strings.ToLower(text[:min(300, len(text))])
+	low := strings.ToLower(text[:minInt(300, len(text))])
 	if strings.HasPrefix(low, "<!") || strings.HasPrefix(low, "<html") || strings.Contains(low, "<html") {
 		if strings.Contains(low, "captcha") || strings.Contains(low, "challenge") {
 			return "CAPTCHA_REQUIRED"
@@ -322,7 +322,7 @@ func nonJSONResponseCode(status int, body []byte) string {
 	return "UNPARSEABLE_RESPONSE"
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
@@ -347,10 +347,10 @@ func rejectNeedsTermAccept(codes []string) bool {
 }
 
 // ==========================================
-// GRAPHQL QUERIES (Compact)
+// GRAPHQL QUERIES
 // ==========================================
 
-const QUERY_PROPOSAL = `query Proposal($sessionInput:SessionTokenInput!,$queueToken:String,$checkpointData:String,$delivery:DeliveryTermsInput,$merchandise:MerchandiseTermInput,$payment:PaymentTermInput,$buyerIdentity:BuyerIdentityTermInput,$taxes:TaxTermInput){session(sessionInput:$sessionInput){negotiate(input:{purchaseProposal:{delivery:$delivery,discounts:{lines:[],acceptUnexpectedDiscounts:true},payment:$payment,merchandise:$merchandise,buyerIdentity:$buyerIdentity,taxes:$taxes},checkpointData:$checkpointData,queueToken:$queueToken}){__typename result{...on NegotiationResultAvailable{checkpointData queueToken buyerProposal{...BuyerProposalDetails}sellerProposal{...ProposalDetails}__typename}...on CheckpointDenied{redirectUrl __typename}...on Throttled{pollAfter queueToken pollUrl __typename}...on NegotiationResultFailed{__typename}__typename}errors{code localizedMessage __typename}__typename}}__typename}}fragment BuyerProposalDetails on Proposal{buyerIdentity{...on FilledBuyerIdentityTerms{email phone __typename}__typename}merchandise{...on FilledMerchandiseTerms{merchandiseLines{stableId merchandise{...on ProductVariantMerchandise{id digest variantId __typename}...on ContextualizedProductVariantMerchandise{id digest variantId __typename}__typename}__typename}__typename}__typename}fragment ProposalDetails on Proposal{merchandise{...on FilledMerchandiseTerms{merchandiseLines{stableId merchandise{...on ProductVariantMerchandise{id digest variantId __typename}...on ContextualizedProductVariantMerchandise{id digest variantId __typename}__typename}__typename}__typename}delivery{...on FilledDeliveryTerms{progressiveRatesEstimatedTimeUntilCompletion intermediateRates deliveryLines{destinationAddress{...on StreetAddress{handle __typename}__typename}selectedDeliveryStrategy{...on CompleteDeliveryStrategy{handle __typename}__typename}availableDeliveryStrategies{handle amount{value{amount currencyCode __typename}__typename}__typename}targetMerchandise{linesV2{merchandise{...on SourceProvidedMerchandise{requiresShipping __typename}...on ProductVariantMerchandise{requiresShipping __typename}...on ContextualizedProductVariantMerchandise{requiresShipping __typename}__typename}__typename}__typename}__typename}__typename}__typename}deliveryExpectations{...on FilledDeliveryExpectationTerms{deliveryExpectations{deliveryStrategyHandle signedHandle __typename}__typename}__typename}payment{...on FilledPaymentTerms{availablePaymentLines{paymentMethod{...on PaymentProvider{paymentMethodIdentifier name extensibilityDisplayName __typename}__typename}__typename}__typename}__typename}tax{...on FilledTaxTerms{totalTaxAmount{value{amount __typename}__typename}totalTaxAmountV2{amount __typename}__typename}...on PendingTerms{pollDelay __typename}__typename}runningTotal{value{amount currencyCode __typename}__typename}checkoutTotal{value{amount currencyCode __typename}__typename}subtotalBeforeTaxesAndShipping{value{amount __typename}__typename}scriptFingerprint{signature signatureUuid lineItemScriptChanges paymentScriptChanges shippingScriptChanges __typename}transformerFingerprintV2 __typename}`
+const QUERY_PROPOSAL = `query Proposal($sessionInput:SessionTokenInput!,$queueToken:String,$checkpointData:String,$delivery:DeliveryTermsInput,$merchandise:MerchandiseTermInput,$payment:PaymentTermInput,$buyerIdentity:BuyerIdentityTermInput,$taxes:TaxTermInput){session(sessionInput:$sessionInput){negotiate(input:{purchaseProposal:{delivery:$delivery,discounts:{lines:[],acceptUnexpectedDiscounts:true},payment:$payment,merchandise:$merchandise,buyerIdentity:$buyerIdentity,taxes:$taxes},checkpointData:$checkpointData,queueToken:$queueToken}){__typename result{...on NegotiationResultAvailable{checkpointData queueToken buyerProposal{...BuyerProposalDetails}sellerProposal{...ProposalDetails}__typename}...on CheckpointDenied{redirectUrl __typename}...on Throttled{pollAfter queueToken pollUrl __typename}...on NegotiationResultFailed{__typename}__typename}errors{code localizedMessage __typename}__typename}}__typename}}fragment BuyerProposalDetails on Proposal{buyerIdentity{...on FilledBuyerIdentityTerms{email phone __typename}__typename}merchandise{...on FilledMerchandiseTerms{merchandiseLines{stableId merchandise{...on ProductVariantMerchandise{id digest variantId __typename}...on ContextualizedProductVariantMerchandise{id digest variantId __typename}__typename}__typename}__typename}__typename}fragment ProposalDetails on Proposal{merchandise{...on FilledMerchandiseTerms{merchandiseLines{stableId merchandise{...on ProductVariantMerchandise{id digest variantId __typename}...on ContextualizedProductVariantMerchandise{id digest variantId __typename}__typename}__typename}__typename}delivery{...on FilledDeliveryTerms{progressiveRatesEstimatedTimeUntilCompletion intermediateRates deliveryLines{destinationAddress{...on StreetAddress{handle __typename}__typename}selectedDeliveryStrategy{...on CompleteDeliveryStrategy{handle __typename}__typename}availableDeliveryStrategies{handle amount{value{amount currencyCode __typename}__typename}__typename}targetMerchandise{linesV2{merchandise{...on SourceProvidedMerchandise{requiresShipping __typename}...on ProductVariantMerchandise{requiresShipping __typename}...on ContextualizedProductVariantMerchandise{requiresShipping __typename}__typename}__typename}__typename}__typename}__typename}deliveryExpectations{...on FilledDeliveryExpectationTerms{deliveryExpectations{deliveryStrategyHandle signedHandle __typename}__typename}__typename}payment{...on FilledPaymentTerms{availablePaymentLines{paymentMethod{...on PaymentProvider{paymentMethodIdentifier name extensibilityDisplayName __typename}__typename}__typename}__typename}__typename}tax{...on FilledTaxTerms{totalTaxAmount{value{amount __typename}__typename}totalTaxAmountV2{amount __typename}__typename}...on PendingTerms{pollDelay __typename}__typename}runningTotal{value{amount currencyCode __typename}__typename}checkoutTotal{value{amount currencyCode __typename}__typename}subtotalBeforeTaxesAndShipping{value{amount __typename}__typename}scriptFingerprint{signature signatureUuid lineItemScriptChanges paymentScriptChanges shippingScriptChanges __typename}transformerFingerprintV2 __typename}`
 
 const MUTATION_SUBMIT = `mutation SubmitForCompletion($input:NegotiationInput!,$attemptToken:String!){submitForCompletion(input:$input attemptToken:$attemptToken){...on SubmitSuccess{receipt{...ReceiptDetails __typename}__typename}...on SubmitAlreadyAccepted{receipt{...ReceiptDetails __typename}__typename}...on SubmitFailed{reason __typename}...on SubmitRejected{buyerProposal{...BuyerProposalDetails __typename}sellerProposal{...ProposalDetails __typename}errors{code localizedMessage nonLocalizedMessage __typename}__typename}...on Throttled{pollAfter pollUrl queueToken __typename}...on CheckpointDenied{redirectUrl __typename}...on SubmittedForCompletion{receipt{...ReceiptDetails __typename}__typename}__typename}}fragment ReceiptDetails on Receipt{...on ProcessedReceipt{id token redirectUrl __typename}...on ProcessingReceipt{id pollDelay __typename}...on WaitingReceipt{id pollDelay __typename}...on ActionRequiredReceipt{id action{...on CompletePaymentChallenge{offsiteRedirect url __typename}...on CompletePaymentChallengeV2{challengeType challengeData __typename}__typename}__typename}...on FailedReceipt{id processingError{...on PaymentFailed{code messageUntranslated __typename}...on InventoryClaimFailure{__typename}...on InventoryReservationFailure{__typename}...on OrderCreationFailure{__typename}__typename}__typename}__typename}`
 
@@ -391,13 +391,13 @@ func processCard(ctx context.Context, cc, mes, ano, cvv, siteURL, variantID, pro
 	email := genEmail(fName, lName)
 
 	headers := map[string]string{
-		"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-		"Accept":          "application/json, text/plain, */*",
-		"Accept-Language": "en-US,en;q=0.9",
-		"Content-Type":    "application/json",
-		"Origin":          baseURL,
-		"Referer":         baseURL + "/",
-		"sec-ch-ua":       `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`,
+		"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+		"Accept":           "application/json, text/plain, */*",
+		"Accept-Language":  "en-US,en;q=0.9",
+		"Content-Type":     "application/json",
+		"Origin":           baseURL,
+		"Referer":          baseURL + "/",
+		"sec-ch-ua":        `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`,
 		"sec-ch-ua-mobile": "?0",
 		"sec-ch-ua-platform": `"Windows"`,
 	}
@@ -717,7 +717,7 @@ func processCard(ctx context.Context, cc, mes, ano, cvv, siteURL, variantID, pro
 	progETA := fstr(fastExtract(body, "delivery"), "progressiveRatesEstimatedTimeUntilCompletion")
 	if progETA != "" {
 		if ms, err := strconv.Atoi(progETA); err == nil && ms > 0 {
-			delay := min(max(ms, 400), 2000)
+			delay := minInt(max(ms, 400), 2000)
 			time.Sleep(time.Duration(delay) * time.Millisecond)
 			payload, _ = json.Marshal(map[string]interface{}{"query": QUERY_PROPOSAL, "variables": variables, "operationName": "Proposal"})
 			body, _, _ = doReq(ctx, client, "POST", graphqlURL+"?operationName=Proposal", headers, bytes.NewReader(payload))
@@ -959,7 +959,7 @@ func processCard(ctx context.Context, cc, mes, ano, cvv, siteURL, variantID, pro
 		} else if pollType == "ProcessingReceipt" || pollType == "WaitingReceipt" {
 			pollDelay := fstr(fastExtract(body, "receipt"), "pollDelay")
 			if pd, err := strconv.Atoi(pollDelay); err == nil && pd > 0 {
-				time.Sleep(time.Duration(min(pd, 800)) * time.Millisecond)
+				time.Sleep(time.Duration(minInt(pd, 800)) * time.Millisecond)
 			}
 			continue
 		}
@@ -1129,6 +1129,10 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ==========================================
+// MAIN — RAILWAY PORT FIX APPLIED
+// ==========================================
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
@@ -1140,16 +1144,22 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// ✅ RAILWAY PORT FIX: Read dynamic port from environment
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "5001"
+	}
+
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", PORT),
+		Addr:         ":" + port,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 65 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
-	log.Printf("🚀 Shopify Checkout Engine started on port %d\n", PORT)
-	log.Printf("⚡ Single File | Zero Dependencies | 1500 Concurrent | 1GB RAM Optimized\n")
+	log.Printf("🚀 Shopify Checkout Engine starting on port %s\n", port)
+	log.Printf("⚡ by @iam_eesh\n")
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server crashed: %v", err)
 	}
